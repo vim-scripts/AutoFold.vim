@@ -1,0 +1,11 @@
+This is a mirror of http://www.vim.org/scripts/script.php?script_id=925
+
+This script is an attempt at merging syntax and marker based folding.  
+
+Folding based on markers is available for all filetypes.  Currently both the {{{ / }}} and the {{{# / }}}# (where # designates the fold level) marking types are supported.
+
+Syntax folding is currently only available for C, Perl, Python, Shell, and Vim filetypes.
+
+Includes function to check and update the foldmarker and line break formats just before saving the file.
+
+As of version 1.3, includes functions to insert (zf) and remove (zd) fold markers that behave similarly to those in the marker fold method.
