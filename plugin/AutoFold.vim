@@ -3,7 +3,7 @@
 " VimScript:     925
 "
 " Maintainer:    Dave Vehrs <davev(at)ezrs.com>
-" Last Modified: 05 Feb 2005 07:10:42 PM by Dave Vehrs
+" Last Modified: 20 Feb 2005 09:41:23 AM by Dave Vehrs
 "
 " Copyright:     © 2004-2005 Dave Vehrs
 "
@@ -49,6 +49,7 @@ set foldminlines=1
 set foldopen=block,hor,insert,mark,percent,quickfix,search,tag,undo
 set foldtext=SFT_SetFoldText()
 
+
 " Set fold text style
 " ("solid" sets the fold to be a solid line of -, anything else leaves it open
 " for textwidth + 14, then default fold character(-))
@@ -75,14 +76,18 @@ augroup end
 " ------------------------------------------------------------------------------
 " Key-Map Commands:                                                          {{{
 
-" Insert fold markers around marked area (visual mode)                      
-vmap <silent> zf <ESC>:call <SID>InsertFoldMarkers()<CR> 
-" Insert fold marker on this and next line (normal mode)
-nmap <silent> zf <ESC>V:call <SID>InsertFoldMarkers()<CR>                   
-
 " Insert fold markers around marked area (visual mode)
-vmap <silent> zd <ESC>:call <SID>RemoveFoldMarkers()<CR> 
-"nmap <silent> zf <ESC>V:call <SID>InsertFoldMarkers()<CR>
+vmap <silent> zf <ESC>:call <SID>InsertFoldMarkers()<CR>
+vmap <silent> zF <ESC>:call <SID>InsertFoldMarkers()<CR>
+" Insert fold marker on this and next line (normal mode)
+nmap <silent> zf <ESC>V:call <SID>InsertFoldMarkers()<CR>
+nmap <silent> zF <ESC>V:call <SID>InsertFoldMarkers()<CR>
+
+" Remove fold markers around marked area (visual mode)
+vmap <silent> zd <ESC>:call <SID>RemoveFoldMarkers()<CR>
+" Remove fold marker on this and next line (normal mode)
+nmap <silent> zd V:call <SID>RemoveFoldMarkers()<CR>
+
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " Folding Functions:                                                        {{{1
@@ -171,7 +176,7 @@ endfunction
 function! s:SF_perl_folds(lnum)
   let l:line = getline(a:lnum)
   let l:pnum = a:lnum - 1
-  if     l:line =~ '^\s*sub\s\+\S\+\s\+\(:\s\+\S\+\s\+\)*{\s*$'
+  if     l:line =~ '^\s*sub\s\+\S\+\_s\+\(:\s\+\S\+\_s\+\)*{\?\s*$'
     return "a1"
   endif
   if l:line =~ "^\s*\#.*"
@@ -371,6 +376,33 @@ endfunction
 " ------------------------------------------------------------------------------
 " Other Functions:                                                           {{{
 
+" Inspired by foldlist.vim plugin by Paul C. Wei (vimscript#500).  
+function! s:FoldList()
+  let l:win_size = 10
+  let l:win_dir = 'botright'
+  let l:bufname = '__Fold-List__'
+
+  " let l:current_buffer = 
+  
+  let l:winnum = bufwinnr(l:bufname)
+  if l:winnum != -1
+    execute l:winnum . 'wincmd w'
+  else
+    let l:bufnum = bufnr(l:bufname)
+    if bufnum = -1
+      let l:win_cmd = l:bufname
+    else
+      let l:win_cmd = '+buffer'.bufnum
+    endif
+    execute 'silent! ' . l:win_dir . ' ' . l:win_size . ' split ' . l:win_cmd
+    set buftype=nofile
+    set noswapfile
+    let l:winnum = bufwinnr(l:bufname)
+  endif
+
+
+endfunction
+
 " Report back the single line leading comment character for queried language.
 function! s:GetCommentChar(ftype)
 	if a:ftype == "c" || a:ftype == "cpp"
@@ -385,7 +417,7 @@ function! s:GetCommentChar(ftype)
 	return "\#"
 endfunction
 
-" Insert fold markers (with comments markers as needed)
+" Insert fold markers. 
 function! <SID>InsertFoldMarkers()
 	let l:comment_char = s:GetCommentChar(&filetype)
   set lazyredraw
@@ -401,10 +433,10 @@ function! <SID>InsertFoldMarkers()
   else
     let l:endline = line("'>")
   endif
-  if (match(getline(line("'>")),'^\s*$')) > -1
+  if match(getline(line("'>")),'^\s*$') > -1
     execute line("'>") . ',' . line("'>") . ' substitute/^\s*/' .
           \ l:comment_char . '                            }}}/'
-  elseif (match(getline(l:endline),'^\s*'.l:comment_char)) > -1
+  elseif match(getline(l:endline),'^\s*'.l:comment_char) > -1
     execute l:endline . ',' .  l:endline . ' substitute/^\(.*\)$/\1   }}}/'
   else
     execute l:endline . ',' . l:endline . ' substitute/^\(.*\)$/\1     ' .
@@ -420,10 +452,10 @@ function! <SID>InsertFoldMarkers()
           \ ' substitute/\(.*\)\s\(\s}\{3}\)/\1\2/'
   endwhile
   " Insert fold open
-  if (match(getline(line("'<")),'^\s*$')) > -1
+  if match(getline(line("'<")),'^\s*$') > -1
     execute line("'<") . ',' . line("'<") . ' substitute/^/' .
           \ l:comment_char . '                            {{{/'
-  elseif (match(getline(line("'<")),'^\s*'.l:comment_char)) > -1
+  elseif match(getline(line("'<")),'^\s*'.l:comment_char) > -1
     execute line("'<") . ',' .  line("'<") . ' substitute/^\(.*\)$/\1     {{{/'
   else
     execute line("'<") . ',' . line("'<") . ' substitute/^\(.*\)$/\1     ' .
@@ -443,62 +475,69 @@ function! <SID>InsertFoldMarkers()
   redraw!
 endfunction
 
-" Remove fold markers
+" Remove fold markers.
 function! <SID>RemoveFoldMarkers()
 	let l:comment_char = s:GetCommentChar(&filetype)
   set lazyredraw
   normal mzggzi
   " Remove fold open marker
-  if (match(getline(line("'<")),'^\(\s*' . l:comment_char . 
+  if (match(getline(line("'<")),'^\(\s*' . l:comment_char .
    \ '\s\+\|\s\+\){\{3}\d*\s*$' )) > -1
     execute line("'<") . ',' . line("'<") . ' delete'
-  elseif (match(getline(line("'<")), '^\(\s*' . l:comment_char . 
-       \ '\s*\|\s*\)\S.*{\{3}\d*\s*$' )) > -1
+  elseif match(getline(line("'<")), '^\(\s*' . l:comment_char .
+       \ '\s*\|\s*\)\S.*{\{3}\d*\s*$' ) > -1
     execute line("'<") . ',' . line("'<") .
-          \ ' substitute/\(.*\)\s\({\{3}\d*\s*\)$/\1/'
+          \ ' substitute/\s\{1,}['.l:comment_char.']*\s\{1,}{\{3}\d*\s*$//'
   else
-    echoerr "Fold Open marker not found in highlighted text."
+    echoerr "Fold Open marker not found in the first line of the highlighted text."
     normal zi`z
     set nolazyredraw
     redraw!
     return
   endif
   " Remove fold close marker
-  if (match(getline(line("'>")), '^\(\s*' . l:comment_char . 
-   \ '\s\+\|\s\+\)}\{3}\d*\s*$' )) > -1
-    execute line("'>") . ',' . line("'>") . ' delete'
-  elseif (match(getline(line("'>")),'^\(\s*' . l:comment_char . 
-       \ '\s*\|\s*\)\S.*}\{3}\d*\s*$' )) > -1
-    execute line("'>") . ',' . line("'>") .
-          \ ' substitute/\(.*\)['.l:comment_char.']*\s*\(}\{3}\d*\s*\)$/\1/'
+  if line("'<") == line("'>")
+    let l:endline = line("'>") + 1
+  else
+    let l:endline = line("'>")
+  endif
+  if match(getline(l:endline), '^\(\s*' . l:comment_char .
+   \ '\s\+\|\s\+\)}\{3}\d*\s*$' ) > -1
+    execute l:endline . ',' . l:endline . ' delete'
+  elseif match(getline(l:endline),'^\(\s*' . l:comment_char .
+       \ '\s*\|\s*\)\S.*[\s*['.l:comment_char.'\s\+]*}\{3}\d*\s*$' ) > -1
+    execute l:endline . ',' . l:endline .
+          \ ' substitute/\s\{1,}['.l:comment_char.']*\s\{1,}}\{3}\d*\s*$//'
   else
     undo
-    echoerr "Fold Close marker not found in highlighted text."
+    echoerr "Fold Close marker not found in the last line of the highlighted text."
   endif
   normal zi`z
   set nolazyredraw
   redraw!
 endfunction
 
+
 " Seach file for fold markers & line breaks then checks/fixes the format.
 function! s:UpdateFoldMarkers()
   if &modified && &foldexpr == "SF_SetFolds()"
 	  set lazyredraw
     normal mzggzi
+    let l:current_line = line (".")
     " search for lines to check/fix
     while search('\s\(\({\|}\)\{3}\d*\|-\{20,}\)\s*$', 'W') > 0
       " Strip trailing spaces off all found lines
       execute 'silent substitute/\(\({\|}\)\{3}\d*\|-\{20,}\)\s*$/\1/'
-      if (match(getline("."),'\s\({\|}\)\{3}\d*\s*$')) > 1
-      " Check/fix folder marker lines
-      while strlen(getline(".")) < &textwidth
-        execute 'silent substitute/\(.*\)\(\s\({\|}\)\{3}\)/\1   \2/'
-      endwhile
-      while strlen(getline(".")) > &textwidth &&
-          \ match(getline("."),'\s\{2}\({\|}\)\{3}\d*\s*$') > 1
-        execute 'silent substitute/\(.*\)\s\(\s\({\|}\)\{3}\)/\1\2/'
-      endwhile
-      elseif (match(getline("."),'-\{20,}\s*$')) > 1
+      if match(getline("."),'\s\({\|}\)\{3}\d*\s*$') > 1
+        " Check/fix folder marker lines
+        while strlen(getline(".")) < &textwidth
+          execute 'silent substitute/\(.*\)\(\s\({\|}\)\{3}\)/\1   \2/'
+        endwhile
+        while strlen(getline(".")) > &textwidth &&
+            \ match(getline("."),'\s\{2}\({\|}\)\{3}\d*\s*$') > 1
+          execute 'silent substitute/\(.*\)\s\(\s\({\|}\)\{3}\)/\1\2/'
+        endwhile
+      elseif match(getline("."),'-\{20,}\s*$') > 1
       " Check/fix line breaks (i.e -------- >20 characters long)
         while strlen(getline(".")) < &textwidth
           execute 'silent substitute/\(\s-*\)/\1---/'
@@ -507,7 +546,7 @@ function! s:UpdateFoldMarkers()
           execute 'silent substitute/\(\s-\{18,}\)-\s*$/\1/'
         endwhile
       endif
-      if line(".") <= line("$") | +1 | else | break | endif
+      if line(".") < line("$") | +1 | else | break | endif
     endwhile
     normal zi`z
     set nolazyredraw
@@ -519,8 +558,8 @@ endfunction
 " ------------------------------------------------------------------------------
 " NOTES: Fold Hints                                                          {{{
 " Commands:
-"     zf        Insert fold markers (normal & visual modes).
-"     zd        Remove fold markers (visual mode).
+"     zf        Insert fold markers.
+"     zd        Remove fold markers.
 "   Opening and closing folds:
 "     zo        Open fold one level.
 "     zO        Open all folds under cursor recursively.
@@ -547,7 +586,7 @@ endfunction
 " NOTES: Known Issues and Todo                                               {{{
 " 1.  SFT_SetFoldText() sets all <tab> indents to 1 space.  Spaces are preserved
 "     to width.  Not sure why it happens or how to fix.  (Hack: set expandtab)
-" 2.  Look into &commentstring, how can we use that?                        
+" 2.  Look into &commentstring, how can we use that?
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " Version History:                                                           {{{
@@ -564,8 +603,11 @@ endfunction
 " 1.2.2 02-01-2005   Improved fold marker fixing and added fixing for --- line
 "                    breaks.
 " 1.3   02-05-2005   General cleanup. More improvements to UpdateFoldMarkers().
-"                    Added "Fold Hints". Added functions to insert and remove 
+"                    Added "Fold Hints". Added functions to insert and remove
 "                    fold markers.
+" 1.3.1 02-20-2005   Improvements to RemoveFoldMarkers and UpdateFoldMarkers.  
+"                    Thanks to Eric for the perl folding patch and the formating 
+"                    ideas.
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " vim:tw=80:ts=2:sw=2:
