@@ -1,7 +1,7 @@
 " ------------------------------------------------------------------------------
 " Filename:      AutoFold.vim                                                {{{
 " VimScript:     925
-" Last Modified: 24 Apr 2004 21:37:00 by Dave Vehrs,,,
+" Last Modified: 13 Oct 2004 03:24:02 AM by Dave Vehrs
 " Maintainer:    Dave Vehrs (davev at ezrs.com)
 " Description:   A script to automate folding based on markers and syntax with
 "                language specific support for Perl, Python, Shell, and
@@ -16,8 +16,10 @@
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " Exit if already loaded.                                                    {{{
+
 if (exists("loaded_autofold") || &cp) | finish | endif
 let g:loaded_autofold=1
+
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " Configuration                                                              {{{
@@ -28,7 +30,19 @@ set foldexpr=SF_SetFolds()
 set foldtext=SFT_SetFoldText()
 set foldminlines=1
 
-"                                                                            }}}
+" Set fold text style 
+" ("solid" sets the fold to be a solid line of -, anything else leaves it open 
+" for textwidth + 14, then default fold character(-))
+if ( !exists("g:AF_foldstyle") )
+	let g:AF_foldstyle = 'open'
+endif 
+
+" Set fold width 
+" ("full" sets to window width, anything else sets it to text width)
+if ( !exists("g:AF_foldwidth") )
+	let g:AF_foldwidth = 'text'
+endif
+"                                                                             }}}
 " ------------------------------------------------------------------------------
 " Custom Fold Text:                                                         {{{1
 
@@ -46,19 +60,32 @@ function! SFT_SetFoldText()
   endif
   let l:line = substitute(l:line, '^\s*\|/\*\|\*/\|\s*[{{{]*\d*\s*$', '', 'g')
   " Set line width.
-  let l:width = &textwidth -  (13 + strlen(l:bline))
+	if g:AF_foldwidth == 'full'
+    let l:width = &columns -  (13 + &fdc + strlen(l:bline))
+	else
+    let l:width = &textwidth -  (13 + strlen(l:bline))
+	endif
   if strlen(l:line) > l:width
     let l:line = strpart(l:line,0,l:width - 2) . "..."
   else
-    while strlen(l:line) <= l:width | let l:line = l:line . " " | endwhile
+		if g:AF_foldstyle == 'solid'
+			 while strlen(l:line) <= (l:width - 2) | let l:line = l:line . "-" | endwhile
+       let l:line = l:line . "->"
+		else	
+			while strlen(l:line) <= l:width | let l:line = l:line . " " | endwhile
+		endif
   endif
   " Set tail (line count, etc.).
-  if     l:lcnt <= 9   | let l:tline = "[lines:   " . l:lcnt . "] "
-  elseif l:lcnt <= 99  | let l:tline = "[lines:  ". l:lcnt . "] "
-  elseif l:lcnt <= 999 | let l:tline = "[lines: ". l:lcnt . "] "
-  else                 | let l:tline = "[lines:". l:lcnt . "] "| endif
+  if     l:lcnt <= 9   | let l:tline = "[lines:   " . l:lcnt . "]"
+  elseif l:lcnt <= 99  | let l:tline = "[lines:  ". l:lcnt . "]"
+  elseif l:lcnt <= 999 | let l:tline = "[lines: ". l:lcnt . "]"
+  else                 | let l:tline = "[lines:". l:lcnt . "]"| endif
   " Set return line
-  return l:bline . l:line . l:tline . "             <"
+	if ( g:AF_foldstyle == 'solid' && g:AF_foldwidth != 'full' )
+		return l:bline . l:line . l:tline . "<"
+	else
+		return l:bline . l:line . l:tline . "              <"
+	endif
 endfunction
 
 " Filetype specific cleanup functions.                                      {{{2
@@ -79,7 +106,7 @@ function! s:SFT_c_clean(line)
 endfunction
 
 " Cleanup for Perl scripts.
-function! s:SFT_perl_clean(lnum)
+function! s:SFT_perl_clean(line)
   let l:line = substitute(a:line, '^\#\s*\|\s{\s*$\|\s\+(*)*\s*{\s*$', '', 'g')
   let l:line = substitute(l:line, '^sub\s', 'Subroutine: ', 'g')
   return l:line
@@ -150,7 +177,7 @@ function! s:SF_common_folds(lnum)
   endif
   if l:line =~ '\s\+}}}\s*$'
     return "s1"
-    endif
+  endif
   return "NF"
 endfunction
 
@@ -290,7 +317,7 @@ endfunction
 
 "                                                                           }}}1
 " ------------------------------------------------------------------------------
-" Other Functions:                                                           {{{
+" Mappings:                                                                  {{{
 
 " Insert fold markers around marked area (visual mode)
 vmap zf  mz:<esc>'<O//{{{<esc>'>o// }}}<esc>`z?{{{<cr>A<space>
@@ -302,6 +329,8 @@ vmap zf  mz:<esc>'<O//{{{<esc>'>o// }}}<esc>`z?{{{<cr>A<space>
 " 1.1  04-24-2004  Consolidated SFT_SetFoldText subfunctions to improve
 "                  performance. Perl, Shell, and Vim folding pattern clean ups.
 "                  Added initial C language support.
-"                                                                            }}}
+" 1.2  10-13-2004  Added Fold text style & width configuration items.  Thanks to
+"                  Wolfgang H. for patches and ideas.   
+"                      	                                                      }}}
 " ------------------------------------------------------------------------------
 " vim:tw=80:ts=2:sw=2:
