@@ -2,8 +2,8 @@
 " Filename:      AutoFold.vim                                                {{{
 " VimScript:     925
 "
-" Maintainer:    Dave Vehrs <davev (at) ezrs.com>
-" Last Modified: 01 Feb 2005 12:01:10 AM by Dave Vehrs
+" Maintainer:    Dave Vehrs <davev(at)ezrs.com>
+" Last Modified: 05 Feb 2005 07:10:42 PM by Dave Vehrs
 "
 " Copyright:     © 2004-2005 Dave Vehrs
 "
@@ -30,9 +30,16 @@
 " Install:       Save this file in your .vim/plugins/ directory or load it
 "                manually with :source AutoFold.vim.
 "
+"                Additional notes at end of file.                            }}}
+" ------------------------------------------------------------------------------
+" Exit if already loaded.                                                    {{{
+
+if (exists("loaded_autofold") || &cp) | finish | endif
+let g:loaded_autofold=1
+
 "                                                                            }}}
 " ------------------------------------------------------------------------------
-" Configuration                                                              {{{
+" Configuration:                                                             {{{
 
 filetype on
 set foldcolumn=0
@@ -57,127 +64,28 @@ endif
 
 "                                                                            }}}
 " ------------------------------------------------------------------------------
-" Exit if already loaded.                                                    {{{
-
-if (exists("loaded_autofold") || &cp) | finish | endif
-let g:loaded_autofold=1
-
-"                                                                            }}}
-" ------------------------------------------------------------------------------
 " Autocommands:                                                              {{{
 
-" Check/Fix Fold Marker Format
-
-if has("eval")
-  augroup AutoFold
-    autocmd!
-    autocmd BufWritePre,FileWritePre * ks|call s:UpdateFoldMarkers()|'s
-  augroup end
-endif
+augroup AutoFold
+  autocmd!
+  autocmd BufWritePre,FileWritePre * ks|call s:UpdateFoldMarkers()|'s
+augroup end
 
 "                                                                            }}}
 " ------------------------------------------------------------------------------
-" Fold Text:                                                                {{{1
+" Key-Map Commands:                                                          {{{
 
-function! SFT_SetFoldText()
-  let l:lcnt = v:foldend - v:foldstart + 1
-  let l:line = getline(v:foldstart)
-  " Record indent.
-  let l:indent = substitute(l:line,'\(^\s*\)\S.\+$','\1','') . '+ '
-  " Clean up line.
-  if l:line =~ '^\s*\/\*[*]*\s*$'
-    let l:line = getline(v:foldstart + 1)
-  endif
-  if exists("*s:SFT_{&filetype}_clean")
-    let l:line = s:SFT_{&filetype}_clean(l:line)
-  endif
-  let l:line = substitute(l:line, '^\s*\|/\*\|\*\|\*/\|\s*[{{{]\s*\d*\|\s*$', '', 'g')
-  " Set line width.
-	if g:AF_foldwidth == 'full'
-    let l:width = &columns -  (13 + &fdc + strlen(l:indent))
-	else
-    let l:width = &textwidth -  (13 + strlen(l:indent))
-	endif
-  if strlen(l:line) > l:width
-    let l:line = strpart(l:line,0,l:width - 2) . "..."
-  else
-		if g:AF_foldstyle == 'solid'
-			 while strlen(l:line) <= (l:width - 2)
-         let l:line = l:line . "-"
-       endwhile
-       let l:line = l:line . "->"
-		else
-			while strlen(l:line) <= l:width
-        let l:line = l:line . " "
-      endwhile
-		endif
-  endif
-  " Set tail (line count, etc.).
-  if     l:lcnt <= 9   | let l:tail = "[lines:   " . l:lcnt . "]"
-  elseif l:lcnt <= 99  | let l:tail = "[lines:  ". l:lcnt . "]"
-  elseif l:lcnt <= 999 | let l:tail = "[lines: ". l:lcnt . "]"
-  else                 | let l:tail = "[lines:". l:lcnt . "]"| endif
-  " Set return line
-	if ( g:AF_foldstyle == 'solid' && g:AF_foldwidth != 'full' )
-		return l:indent . l:line . l:tail . "<"
-	else
-		return l:indent . l:line .  l:tail .  "              <"
-	endif
-endfunction
+" Insert fold markers around marked area (visual mode)                      
+vmap <silent> zf <ESC>:call <SID>InsertFoldMarkers()<CR> 
+" Insert fold marker on this and next line (normal mode)
+nmap <silent> zf <ESC>V:call <SID>InsertFoldMarkers()<CR>                   
 
-" Filetype specific cleanup functions.                                      {{{2
-
-" Cleanup for C files.
-		function! s:SFT_c_clean(line)
-			let l:line = substitute(a:line, '^\s*[/]*\*\+\s', 'Comment: ', 'g')
-			"let l:line = substitute(l:line, '^\s*\/\*\s', 'Comment: ', 'g')
-			if l:line =~ '^\s*\#if'
-				let l:line = substitute(l:line, '^\s*\#', '', 'g')
-				let l:line = substitute(l:line, '^ifdef\s\+', 'IFDEF: ', 'g')
-				let l:line = substitute(l:line, '^if defined(', 'IF DEFINED: ', 'g')
-				let l:line = substitute(l:line, '^if !defined(', 'IF NOT DEFINED: ', 'g')
-				let l:line = substitute(l:line, '&& defined(', ', ', 'g')
-				let l:line = substitute(l:line, ')\s*\(\/\*.*\*\/\s*\)*', '', 'g')
-			endif
-			return l:line
-		endfunction
-
-" Cleanup for Perl scripts.
-function! s:SFT_perl_clean(line)
-	let l:line = substitute(a:line, '^\#\s*\|\s{\s*$\|\s\+(*)*\s*{\s*$', '', 'g')
-	let l:line = substitute(l:line, '^sub\s', 'Subroutine: ', 'g')
-	return l:line
-endfunction
-
-" Cleanup for Python files.
-function! s:SFT_python_clean(line)
-  let l:line = substitute(a:line, '^\"\s*\|\s*\&\S*\*\s*$', '', 'g')
-  let l:line = substitute(l:line, '^def\s', 'Function: ', 'g')
-  let l:line = substitute(l:line, '^class\s', 'Class: ', 'g')
-  return l:line
-endfunction
-
-" Cleanup for Shell scripts.
-function! s:SFT_sh_clean(line)
-  let l:line = substitute(a:line, '^\#\s*\|\s\+(*)*\s*{\s*$', '', 'g')
-  let l:line = substitute(l:line, '^function\s', 'Function: ', 'g')
-  return l:line
-endfunction
-
-" Cleanup for Vim scripts.
-function! s:SFT_vim_clean(line)
-  let l:line = substitute(a:line, '^\"\s*\|\s*\&\S*\*\s*$\|()\s*$', '', 'g')
-  let l:line = substitute(l:line, '^\s*augroup', 'Autocommand Group:', 'g')
-  let l:line = substitute(l:line, 'function\!*\s\+\c\(s:\|<sid>\)*',
-    \ 'Function: ', 'g')
-  return l:line
-endfunction
-
-"                                                                           }}}2
-
-"                                                                           }}}1
+" Insert fold markers around marked area (visual mode)
+vmap <silent> zd <ESC>:call <SID>RemoveFoldMarkers()<CR> 
+"nmap <silent> zf <ESC>V:call <SID>InsertFoldMarkers()<CR>
+"                                                                            }}}
 " ------------------------------------------------------------------------------
-" Set Folds:                                                                {{{1
+" Folding Functions:                                                        {{{1
 
 function! SF_SetFolds()
   let l:test = s:SF_common_folds(v:lnum)
@@ -196,7 +104,7 @@ endfunction
 " Folding rules for all files (markers).
 function! s:SF_common_folds(lnum)
   let l:line = getline(a:lnum)
-	let l:comment_char = s:Get_Commentchar(&filetype)
+	let l:comment_char = s:GetCommentChar(&filetype)
   if l:line =~ '^\s*$'
     return "="
   endif
@@ -205,7 +113,7 @@ function! s:SF_common_folds(lnum)
     let l:flvl = substitute(l:line, '^.*{{{', '', 'g')
     return ">" . l:flvl
   endif
-  if l:line =~ '\s\+{{{\d\+\s*$'
+  if l:line =~ '\s\+{{{\d\+\(\s*\|-->\s*\)$'
     let l:flvl = substitute(l:line, '^.*{{{', '', 'g')
     return ">" . l:flvl
   endif
@@ -357,18 +265,118 @@ function! s:SF_vim_folds(lnum)
   endif
   return "NF"
 endfunction
+"                                                                           }}}2
+
+"                                                                           }}}1
+" ------------------------------------------------------------------------------
+" FoldText Formating Functions:                                             {{{1
+
+function! SFT_SetFoldText()
+  let l:lcnt = v:foldend - v:foldstart + 1
+  let l:line = getline(v:foldstart)
+  " Record indent.
+  let l:indent = substitute(l:line,'\(^\s*\)\S.\+$','\1','') . '+ '
+  " Clean up line.
+  if l:line =~ '^\s*\/\*[*]*\s*$'
+    let l:line = getline(v:foldstart + 1)
+  endif
+  if exists("*s:SFT_{&filetype}_clean")
+    let l:line = s:SFT_{&filetype}_clean(l:line)
+  endif
+  let l:line = substitute(l:line, '^\s*\|/\*\|\*\|\*/\|\s*[{{{]\s*\d*\|\s*$', '', 'g')
+  " Set line width.
+	if g:AF_foldwidth == 'full'
+    let l:width = &columns -  (13 + &fdc + strlen(l:indent))
+	else
+    let l:width = &textwidth -  (13 + strlen(l:indent))
+	endif
+  if strlen(l:line) > l:width
+    let l:line = strpart(l:line,0,l:width - 2) . "..."
+  else
+		if g:AF_foldstyle == 'solid'
+			 while strlen(l:line) <= (l:width - 2)
+         let l:line = l:line . "-"
+       endwhile
+       let l:line = l:line . "->"
+		else
+			while strlen(l:line) <= l:width
+        let l:line = l:line . " "
+      endwhile
+		endif
+  endif
+  " Set tail (line count, etc.).
+  if     l:lcnt <= 9   | let l:tail = "[lines:   " . l:lcnt . "]"
+  elseif l:lcnt <= 99  | let l:tail = "[lines:  ". l:lcnt . "]"
+  elseif l:lcnt <= 999 | let l:tail = "[lines: ". l:lcnt . "]"
+  else                 | let l:tail = "[lines:". l:lcnt . "]"| endif
+  " Set return line
+	if ( g:AF_foldstyle == 'solid' && g:AF_foldwidth != 'full' )
+		return l:indent . l:line . l:tail . "<"
+	else
+		return l:indent . l:line .  l:tail .  "              <"
+	endif
+endfunction
+
+" Filetype specific cleanup functions.                                      {{{2
+
+" Cleanup for C files.
+		function! s:SFT_c_clean(line)
+			let l:line = substitute(a:line, '^\s*[/]*\*\+\s', 'Comment: ', 'g')
+			"let l:line = substitute(l:line, '^\s*\/\*\s', 'Comment: ', 'g')
+			if l:line =~ '^\s*\#if'
+				let l:line = substitute(l:line, '^\s*\#', '', 'g')
+				let l:line = substitute(l:line, '^ifdef\s\+', 'IFDEF: ', 'g')
+				let l:line = substitute(l:line, '^if defined(', 'IF DEFINED: ', 'g')
+				let l:line = substitute(l:line, '^if !defined(', 'IF NOT DEFINED: ', 'g')
+				let l:line = substitute(l:line, '&& defined(', ', ', 'g')
+				let l:line = substitute(l:line, ')\s*\(\/\*.*\*\/\s*\)*', '', 'g')
+			endif
+			return l:line
+		endfunction
+
+" Cleanup for Perl scripts.
+function! s:SFT_perl_clean(line)
+	let l:line = substitute(a:line, '^\#\s*\|\s{\s*$\|\s\+(*)*\s*{\s*$', '', 'g')
+	let l:line = substitute(l:line, '^sub\s', 'Subroutine: ', 'g')
+	return l:line
+endfunction
+
+" Cleanup for Python files.
+function! s:SFT_python_clean(line)
+  let l:line = substitute(a:line, '^\"\s*\|\s*\&\S*\*\s*$', '', 'g')
+  let l:line = substitute(l:line, '^def\s', 'Function: ', 'g')
+  let l:line = substitute(l:line, '^class\s', 'Class: ', 'g')
+  return l:line
+endfunction
+
+" Cleanup for Shell scripts.
+function! s:SFT_sh_clean(line)
+  let l:line = substitute(a:line, '^\#\s*\|\s\+(*)*\s*{\s*$', '', 'g')
+  let l:line = substitute(l:line, '^function\s', 'Function: ', 'g')
+  return l:line
+endfunction
+
+" Cleanup for Vim scripts.
+function! s:SFT_vim_clean(line)
+  let l:line = substitute(a:line, '^\"\s*\|\s*\&\S*\*\s*$\|()\s*$', '', 'g')
+  let l:line = substitute(l:line, '^\s*augroup', 'Autocommand Group:', 'g')
+  let l:line = substitute(l:line, 'function\!*\s\+\c\(s:\|<sid>\)*',
+    \ 'Function: ', 'g')
+  return l:line
+endfunction
 
 "                                                                           }}}2
 
 "                                                                           }}}1
 " ------------------------------------------------------------------------------
-" Shared Functions:                                                          {{{
+" Other Functions:                                                           {{{
 
 " Report back the single line leading comment character for queried language.
-function! s:Get_Commentchar(ftype)
+function! s:GetCommentChar(ftype)
 	if a:ftype == "c" || a:ftype == "cpp"
 		return "\/\/"
-	if a:ftype == "perl" || a:ftype == "python" || asie:ftype == "sh"
+	elseif a:ftype == "csh" || a:ftype == "perl" || a:ftype == "python" ||
+   \ a:ftype == "sh"
 		return "\#"
 	elseif a:ftype == "vim"
 		return "\""
@@ -377,55 +385,169 @@ function! s:Get_Commentchar(ftype)
 	return "\#"
 endfunction
 
-" Seaches file for fold markers and checks/fixes their format.
-" Seems a little slow with the divider fixing included.  
+" Insert fold markers (with comments markers as needed)
+function! <SID>InsertFoldMarkers()
+	let l:comment_char = s:GetCommentChar(&filetype)
+  set lazyredraw
+  normal mzggzi
+  " Strip trailing spaces off all found lines
+  execute 'silent ' . line("'<") . ',' .  line("'<") .
+        \ 'substitute/\s*$/\1/'
+  execute 'silent ' . line("'>") . ',' .  line("'>") .
+        \ 'substitute/\s*$/\1/'
+  " Insert fold close
+  if line("'<") == line("'>")
+    let l:endline = line("'>") + 1
+  else
+    let l:endline = line("'>")
+  endif
+  if (match(getline(line("'>")),'^\s*$')) > -1
+    execute line("'>") . ',' . line("'>") . ' substitute/^\s*/' .
+          \ l:comment_char . '                            }}}/'
+  elseif (match(getline(l:endline),'^\s*'.l:comment_char)) > -1
+    execute l:endline . ',' .  l:endline . ' substitute/^\(.*\)$/\1   }}}/'
+  else
+    execute l:endline . ',' . l:endline . ' substitute/^\(.*\)$/\1     ' .
+          \ l:comment_char.'   }}}/'
+  endif
+  while strlen(getline(l:endline)) < &textwidth
+    execute 'silent ' . l:endline . ',' .  l:endline .
+          \ ' substitute/\(.*\)\(\s}\{3}\)/\1     \2/'
+  endwhile
+  while strlen(getline(l:endline)) > &textwidth &&
+      \ match(getline(l:endline),'\s\s}\{3}\d*\s*$') > 1
+    execute 'silent ' . l:endline . ',' .  l:endline .
+          \ ' substitute/\(.*\)\s\(\s}\{3}\)/\1\2/'
+  endwhile
+  " Insert fold open
+  if (match(getline(line("'<")),'^\s*$')) > -1
+    execute line("'<") . ',' . line("'<") . ' substitute/^/' .
+          \ l:comment_char . '                            {{{/'
+  elseif (match(getline(line("'<")),'^\s*'.l:comment_char)) > -1
+    execute line("'<") . ',' .  line("'<") . ' substitute/^\(.*\)$/\1     {{{/'
+  else
+    execute line("'<") . ',' . line("'<") . ' substitute/^\(.*\)$/\1     ' .
+          \ l:comment_char . '     {{{/'
+  endif
+  while strlen(getline("'<")) < &textwidth
+    execute 'silent ' . line("'<") . ',' .  line("'<") .
+          \ ' substitute/\(.*\)\(\s{\{3}\)/\1     \2/'
+  endwhile
+  while strlen(getline("'<")) > &textwidth &&
+      \ match(getline("'<"),'\s\s{\{3}\d*\s*$') > 1
+    execute 'silent ' . line("'<") . ',' .  line("'<") .
+          \ ' substitute/\(.*\)\s\(\s{\{3}\)/\1\2/'
+  endwhile
+  normal zi`zzc
+  set nolazyredraw
+  redraw!
+endfunction
+
+" Remove fold markers
+function! <SID>RemoveFoldMarkers()
+	let l:comment_char = s:GetCommentChar(&filetype)
+  set lazyredraw
+  normal mzggzi
+  " Remove fold open marker
+  if (match(getline(line("'<")),'^\(\s*' . l:comment_char . 
+   \ '\s\+\|\s\+\){\{3}\d*\s*$' )) > -1
+    execute line("'<") . ',' . line("'<") . ' delete'
+  elseif (match(getline(line("'<")), '^\(\s*' . l:comment_char . 
+       \ '\s*\|\s*\)\S.*{\{3}\d*\s*$' )) > -1
+    execute line("'<") . ',' . line("'<") .
+          \ ' substitute/\(.*\)\s\({\{3}\d*\s*\)$/\1/'
+  else
+    echoerr "Fold Open marker not found in highlighted text."
+    normal zi`z
+    set nolazyredraw
+    redraw!
+    return
+  endif
+  " Remove fold close marker
+  if (match(getline(line("'>")), '^\(\s*' . l:comment_char . 
+   \ '\s\+\|\s\+\)}\{3}\d*\s*$' )) > -1
+    execute line("'>") . ',' . line("'>") . ' delete'
+  elseif (match(getline(line("'>")),'^\(\s*' . l:comment_char . 
+       \ '\s*\|\s*\)\S.*}\{3}\d*\s*$' )) > -1
+    execute line("'>") . ',' . line("'>") .
+          \ ' substitute/\(.*\)['.l:comment_char.']*\s*\(}\{3}\d*\s*\)$/\1/'
+  else
+    undo
+    echoerr "Fold Close marker not found in highlighted text."
+  endif
+  normal zi`z
+  set nolazyredraw
+  redraw!
+endfunction
+
+" Seach file for fold markers & line breaks then checks/fixes the format.
 function! s:UpdateFoldMarkers()
   if &modified && &foldexpr == "SF_SetFolds()"
-    normal mzgg 
-    while search('\s\(\({\{3}\|}\{3}\)\d*\|-\{20,}\)\s*$', 'W') > 0
-      execute 'silent substitute/\({\{3}\d*\|}\{3}\d*\|-\{20,}\)\s*$/\1/'
-      if (match(getline("."),'\s{\{3}\d*\s*$')) > 1
-        while strlen(getline(".")) < &textwidth
-          execute 'silent substitute/\(.*\)\(\s{\{3}\)/\1 \2/'
-        endwhile
-        while strlen(getline(".")) > &textwidth && 
-            \ match(getline("."),'\s{\{3}\d*\s*$') > 1
-          execute 'silent substitute/\(.*\)\s\(\s{\{3}\)/\1\2/'
-        endwhile
-      elseif (match(getline("."),'\s}\{3}\d*\s*$')) > 1
-        while strlen(getline(".")) < &textwidth
-          execute 'silent substitute/\(.*\)\(\s}\{3}\)/\1 \2/'
-        endwhile
-        while strlen(getline(".")) > &textwidth && 
-            \ match(getline("."),'\s}}}\d*\s*$') > 1
-          execute 'silent substitute/\(.*\)\s\(}\{3}\)/\1\2/'
-        endwhile
+	  set lazyredraw
+    normal mzggzi
+    " search for lines to check/fix
+    while search('\s\(\({\|}\)\{3}\d*\|-\{20,}\)\s*$', 'W') > 0
+      " Strip trailing spaces off all found lines
+      execute 'silent substitute/\(\({\|}\)\{3}\d*\|-\{20,}\)\s*$/\1/'
+      if (match(getline("."),'\s\({\|}\)\{3}\d*\s*$')) > 1
+      " Check/fix folder marker lines
+      while strlen(getline(".")) < &textwidth
+        execute 'silent substitute/\(.*\)\(\s\({\|}\)\{3}\)/\1   \2/'
+      endwhile
+      while strlen(getline(".")) > &textwidth &&
+          \ match(getline("."),'\s\{2}\({\|}\)\{3}\d*\s*$') > 1
+        execute 'silent substitute/\(.*\)\s\(\s\({\|}\)\{3}\)/\1\2/'
+      endwhile
       elseif (match(getline("."),'-\{20,}\s*$')) > 1
+      " Check/fix line breaks (i.e -------- >20 characters long)
         while strlen(getline(".")) < &textwidth
-          execute 'silent substitute/\(\s-*\)/\1-/'
+          execute 'silent substitute/\(\s-*\)/\1---/'
         endwhile
         while strlen(getline(".")) > &textwidth
-          execute 'silent substitute/\(\s-\{18,}\)-\(-*\s*$\)/\1\2/'
+          execute 'silent substitute/\(\s-\{18,}\)-\s*$/\1/'
         endwhile
       endif
-      +1
+      if line(".") <= line("$") | +1 | else | break | endif
     endwhile
-    normal `z
+    normal zi`z
+    set nolazyredraw
+    redraw!
   endif
-endfunction 
+endfunction
 
 "                                                                            }}}
 " ------------------------------------------------------------------------------
-" Mappings:                                                                  {{{
-
-" Insert fold markers around marked area (visual mode)
-"vmap zf  mz:<esc>'>O<esc>'>o_}_}_}_<esc>`z{_{_{_<cr>A<space>
-
+" NOTES: Fold Hints                                                          {{{
+" Commands:
+"     zf        Insert fold markers (normal & visual modes).
+"     zd        Remove fold markers (visual mode).
+"   Opening and closing folds:
+"     zo        Open fold one level.
+"     zO        Open all folds under cursor recursively.
+"     zc        Close one fold level.
+"     zC        Close all folds recursively
+"     zx        Undo Manually opned and closed folds, and view cursor line.
+"     zX        Undo Manually opned and closed fold.
+"   Fold level:
+"     zm        Fold more.  Decrease foldlevel by 1.
+"     zM        Close all folds.  Set foldlevel to 0.
+"     zr        Fold less (reduce). Increase foldlevel by 1.
+"     zR        Open all folds. Set foldlevel to highest.
+"   Moving over folds:
+"     [z        Move to start of current fold.
+"     ]z        Move to end of current fold.
+"     zj        Move down to the first line of the next fold.
+"     zk        Move up to the last line of the previous fold.
+"   Other fold commands:
+"     zi        Toggle foldenable.
+"     zn        Fold none.  Resets foldenable and all folds open.
+"     zN        Fold normal. Sets foldenable and folds display as before.
 "                                                                            }}}
 " ------------------------------------------------------------------------------
-" Known Issues:                                                              {{{
+" NOTES: Known Issues and Todo                                               {{{
 " 1.  SFT_SetFoldText() sets all <tab> indents to 1 space.  Spaces are preserved
-"     to width.  Not sure why it happens or how to fix.  (Hack: set expandtab) 
+"     to width.  Not sure why it happens or how to fix.  (Hack: set expandtab)
+" 2.  Look into &commentstring, how can we use that?                        
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " Version History:                                                           {{{
@@ -440,7 +562,10 @@ endfunction
 "                    to run just before writing the file.  Improved Marker
 "                    folding.
 " 1.2.2 02-01-2005   Improved fold marker fixing and added fixing for --- line
-"                    breaks.  
+"                    breaks.
+" 1.3   02-05-2005   General cleanup. More improvements to UpdateFoldMarkers().
+"                    Added "Fold Hints". Added functions to insert and remove 
+"                    fold markers.
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " vim:tw=80:ts=2:sw=2:
