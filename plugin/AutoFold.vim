@@ -3,9 +3,9 @@
 " VimScript:     925
 "
 " Maintainer:    Dave Vehrs <davev(at)ezrs.com>
-" Last Modified: 20 Feb 2005 09:41:23 AM by Dave Vehrs
+" Last Modified: 27 Feb 2006 12:04:50 PM by lowkey,,,
 "
-" Copyright:     © 2004-2005 Dave Vehrs
+" Copyright:     (C) 2004-2005 Dave Vehrs
 "
 "                This program is free software; you can redistribute it and/or
 "                modify it under the terms of the GNU General Public License as
@@ -49,7 +49,6 @@ set foldminlines=1
 set foldopen=block,hor,insert,mark,percent,quickfix,search,tag,undo
 set foldtext=SFT_SetFoldText()
 
-
 " Set fold text style
 " ("solid" sets the fold to be a solid line of -, anything else leaves it open
 " for textwidth + 14, then default fold character(-))
@@ -69,12 +68,12 @@ endif
 
 augroup AutoFold
   autocmd!
-  autocmd BufWritePre,FileWritePre * ks|call s:UpdateFoldMarkers()|'s
+  autocmd BufWritePre,FileWritePre   * ks|call s:UpdateFoldMarkers()|'s
 augroup end
 
 "                                                                            }}}
 " ------------------------------------------------------------------------------
-" Key-Map Commands:                                                          {{{
+" Command Mapping:                                                           {{{
 
 " Insert fold markers around marked area (visual mode)
 vmap <silent> zf <ESC>:call <SID>InsertFoldMarkers()<CR>
@@ -206,13 +205,16 @@ function! s:SF_python_folds(lnum)
   if l:line =~ "\\$"
     return "="
   endif
-  if l:line =~ '^\s*\(class\|def\)\s\+\S*\s\+(.*\(,\|):\)\s*$'
-   return ">" . (l:indent / &shiftwidth + 1)
+  if l:line =~ "^\s*$"
+    return "="
   endif
-  let l:pnum = prevnonblank(a:lnum - 1)
-  if  ( l:pnum == 0 || foldlevel(l:pnum) == 0 )
-    return "0"
+  if l:line =~ '^\s*\(try:\|\(class\|def\)\s\+\S*\s\+(.*\(,\|):\)\)\s*$'
+   return "a1"
   endif
+"  let l:pnum = prevnonblank(a:lnum - 1)
+"  if  ( l:pnum == 0 || foldlevel(l:pnum) == 0 )
+"    return "0"
+"  endif
   let l:nnum = nextnonblank(a:lnum + 1)
   if  ( l:nnum == 0 || l:nnum  == a:lnum + 1 )
     return "="
@@ -220,10 +222,21 @@ function! s:SF_python_folds(lnum)
   if getline(l:nnum) =~ "^\s*\(except\|else\|elif\)"
     return "="
   endif
+"  echomsg "line     :" . l:line
+"  echomsg "next line:" . getline(l:nnum)
   let l:nindent = indent(l:nnum)
-  if l:nindent < l:indent
-    return "<" . (l:nindent / &shiftwidth + 1)
+  if l:nindent <= l:indent - &tabstop
+"    echomsg "foldlevel: " . foldlevel(a:lnum)
+"    echomsg "indent:    " . l:indent
+"    echomsg "testvalue: " . ((l:indent/&shiftwidth)+1)
+"    if (l:indent / (&shiftwidth-1)-2) <= foldlevel(a:lnum)
+    return "<" . ((l:indent / &shiftwidth)+1)
+"      return "s1"
+"    endif
   endif
+"  if l:nindent <= l:indent - &shiftwidth
+"    return "s1"
+"  endif
   return "NF"
 endfunction
 
@@ -234,14 +247,14 @@ function! s:SF_sh_folds(lnum)
   if  l:line =~ '^\s*function\s\+\S\+\s\+[(.*)]*\s*{\s*$'
     return "a1"
   endif
-  if foldlevel(l:pnum) == 0
-    return "="
-  endif
   if l:line =~ '^\s*\#.*'
     return "="
   endif
   if l:line =~ '^\s*}\s*$'
     return "s1"
+  endif
+  if foldlevel(l:pnum) <= 0
+    return "="
   endif
   return "NF"
 endfunction
@@ -256,7 +269,7 @@ function! s:SF_vim_folds(lnum)
   if l:line =~ '\c^\s*au\%[group]\s\+\(end\)\@!\S\+\s*$'
     return "a1"
   endif
-  if ( foldlevel(l:pnum) == 0 || l:pnum = 0 )
+  if ( foldlevel(l:pnum) <= 0 || l:pnum = 0 )
     return "0"
   endif
   if l:line =~ '^\s*\#.*'
@@ -517,17 +530,25 @@ function! <SID>RemoveFoldMarkers()
   redraw!
 endfunction
 
-
 " Seach file for fold markers & line breaks then checks/fixes the format.
 function! s:UpdateFoldMarkers()
   if &modified && &foldexpr == "SF_SetFolds()"
+    " get current draw and more status
+    let l:current_draw = &lazyredraw
+    let l:current_more = &more
+    " set lazydraw and nomore.
 	  set lazyredraw
-    normal mzggzi
+    set nomore
+    " open folds, save current position and move to top of file.
+    normal zi
+    normal mzgg
     let l:current_line = line (".")
     " search for lines to check/fix
     while search('\s\(\({\|}\)\{3}\d*\|-\{20,}\)\s*$', 'W') > 0
       " Strip trailing spaces off all found lines
-      execute 'silent substitute/\(\({\|}\)\{3}\d*\|-\{20,}\)\s*$/\1/'
+      if match(getline("."),'\s*$') > 1
+        execute 'silent substitute/\s*$//'
+      endif
       if match(getline("."),'\s\({\|}\)\{3}\d*\s*$') > 1
         " Check/fix folder marker lines
         while strlen(getline(".")) < &textwidth
@@ -548,11 +569,16 @@ function! s:UpdateFoldMarkers()
       endif
       if line(".") < line("$") | +1 | else | break | endif
     endwhile
-    normal zi`z
-    set nolazyredraw
+    " Restore fold status and position.
+    normal `z
+    normal zi
+    " Redraw screen and reset lazyredraw/more to previous values.
     redraw!
+    let &more = l:current_more  
+    let &lazyredraw = l:current_draw 
   endif
 endfunction
+
 
 "                                                                            }}}
 " ------------------------------------------------------------------------------
@@ -608,6 +634,8 @@ endfunction
 " 1.3.1 02-20-2005   Improvements to RemoveFoldMarkers and UpdateFoldMarkers.  
 "                    Thanks to Eric for the perl folding patch and the formating 
 "                    ideas.
+" 1.3.2 02-27-2006   Updates to UpdateFoldMarkers (finally discovered 'set
+"                    nomore' so updating won't display to screen).
 "                                                                            }}}
 " ------------------------------------------------------------------------------
 " vim:tw=80:ts=2:sw=2:
